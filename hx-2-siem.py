@@ -8,7 +8,7 @@
 
 a.k.a. FireEye HX Agent Health 2 SIEM Ingestion Script
 
-Version: 0.0.1
+Version: 0.0.2
 Author: Dan Uber
 Twitter: @danub3r
 
@@ -56,6 +56,65 @@ from os import listdir
 #                 </Modules>                  #
 ###############################################
 
+
+###############################################
+#               <Configuration>               #
+###############################################
+# hxAPIUser:     Insert your username which   #
+#              you configured in your HX      # 
+#              Console with the API_Analyst   #
+#              Role.                          #
+#                                             # 
+# hxAPIPass:     Insert above user's          #
+#              password, as configured in the #
+#              HX Console.                    #
+#                                             # 
+# workingPath:   The directory where all of the #
+#              .json output files will go.    # 
+#              ***IMPORTANT*** Make sure you #
+#              include a trailing slash!!!    #
+#              This is where we tell our SIEM #
+#              to watch and ingest any files  #
+#              that it sees. Remember that if #
+#              you're doing a Windows path,   #
+#              you need a double backslash at #
+#              the end, because backslashes   #
+#              are escape characters in       #
+#              Python3.                       #
+#                                             # 
+# limit:         This will limit the JSON     #
+#              response to only return a      #
+#              limited number of endpoints.   #
+#              If you limit the output,       # 
+#              it is normal to get an error:  #
+#              "list index out of range"      #
+#              because our while loop's       # 
+#              condition iterates through     # 
+#              ['data']['total'], which does  # 
+#              not reflect the limit, rather  # 
+#              the environment's total number # 
+#              of agents.                     #
+#                                             # 
+# applianceURL:  This is your HX WebUI URL.   #
+#              The example I've included      #
+#              below should be similar to     # 
+#              what your environment has.     #
+#              Please go from https:// to the #
+#              .com. Don't include a trailing #
+#              slash after the .com or any    #
+#              other path after .com, as that #
+#              information gets built into    #
+#              the requests below.            #
+###############################################
+hxAPIUser = 'API_Analyst_User'
+hxAPIPass = 'API_Analyst_Pass'
+workingPath = 'C:\Windows\Needs\A\Final\Double\Slash\\'
+limit = "50000"
+applianceURL = 'https://EXAMPLE-hx-webui-1.hex01.helix.apps.fireeye.com'
+###############################################
+#             </Configuration>                #
+###############################################
+
 ###############################################
 #               <Filter List>                 #
 ###############################################
@@ -73,25 +132,13 @@ malwareAVstatus_Uninstalled = urllib.parse.quote('[{"field":"malwareAVstatus","a
 malwareAVstatus_Disabled = urllib.parse.quote('[{"field":"malwareAVstatus","arg":["disabled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
 ExdPluginStatus_Uninstalled  = urllib.parse.quote('[{"field":"ExdPluginStatus","arg":["uninstalled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
 ExdPluginStatus_Disabled  = urllib.parse.quote('[{"field":"ExdPluginStatus","arg":["disabled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
+encodedFilters = urllib.parse.quote('[{"field":"online","arg":["online"],"operator":"equals"}]', safe='')
 '''
-encodedFilters = urllib.parse.quote('[{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
 ###############################################
 #              </Filter List>                 #
 ###############################################
 
 
-###############################################
-#              <API Credentials>              #
-###############################################
-# This is where we insert our API credentials.#
-# These creds get passed with the Web Request #
-# below.                                      #
-###############################################
-hxAPIUser = 'API_Analyst_Username_Goes_Here'
-hxAPIPass = 'API_Analyst_Password_Goes_Here'
-###############################################
-#            </API Credentials>               #
-###############################################
 
 
 ###############################################
@@ -99,20 +146,16 @@ hxAPIPass = 'API_Analyst_Password_Goes_Here'
 ###############################################
 # This is the web request that reaches out to #
 # our FireEye HX Appliance's RESTful API and  #
-# retrieves a JSON formatted list of our      #
-# endpoints. The REST API request only has a  #
+# retrieves a JSON serialized list of our     #
+# endpoints. The API request only has a       #
 # single important variable in it, "?limit=", #
 # which we can use to limit the output if we  #
-# wanted. The web request is done using Basic #
+# want. The web request is done using Basic   #
 # Auth. The account which we leverage here    #
 # must have the "api_analyst" role assigned   #
 # to it within our HX Appliance.              #
-# responseLimit allows you to limit the       #
-# number of agents the API returns per query. #
 ###############################################
-responseLimit = "5"
-applianceURL = 'https://EXAMPLE-hx-webui-1.hex01.helix.apps.fireeye.com'
-emit = requests.get(applianceURL + '/hx/api/v3/hosts?limit=' + responseLimit + '&filter=' + encodedFilters, auth=(hxAPIUser, hxAPIPass))
+emit = requests.get(applianceURL + '/hx/api/v3/hosts?limit=' + limit, auth=(hxAPIUser, hxAPIPass))
 ###############################################
 #               </Web Request>                #
 ###############################################
@@ -125,7 +168,7 @@ emit = requests.get(applianceURL + '/hx/api/v3/hosts?limit=' + responseLimit + '
 hostsData = json.loads(emit.text)
 
 # File Manipulation Section - Keep in mind that you might need an extra backslash to prevent the trailing ' from being escaped.
-workingPath = '\Example\Path'
+
 for file in listdir(workingPath):
     if file.endswith('.json'):
         os.remove(workingPath + file)
@@ -142,14 +185,25 @@ if hostsData['data']['total'] > 0:
     # This should step through each object in the JSON object we got earlier.
     while entry < (hostsData['data']['total']):
         # sub-query to pull host-management data from HX
-        r2 = requests.get(applianceURL + '/hx/api/plugins/host-management/v1/data/' + hostsData['data']['entries'][entry]['_id'], auth=(hxAPIUser, hxAPIPass))
+        req = requests.get(applianceURL + '/hx/api/plugins/host-management/v1/data/' + hostsData['data']['entries'][entry]['_id'], auth=(hxAPIUser, hxAPIPass))
         # deserialize the retrieved host-management api json blob into a python dictionary
-        agentData = json.loads(r2.text)
-
-        # Here we're writing the file to disk with a hard-coded filename containing the "hostname" + "agent ID" + ".json" extension.
-        # Notice that we need to step into the nested arrays ['data']['data'] to get hostname and id.
-        with open(workingPath + agentData['data']['data']['hostname'] + '-' + agentData['data']['data']['id'] + '.json', "w") as out:
-            # Notice that we're only taking an inner slice of the python dictionary object. This is what allows Splunk to read it in a legible format.
-            json.dump(agentData['data']['data'], out)
-        # Here we're just increasing the iterator +1, a looping standard.
-        entry += 1
+        agentData = json.loads(req.text)
+        
+        # this if statement allows us to filter out anything that isn't "online"
+        if agentData['data']['data']['online'] == "online":
+            # here, we enrich the result with the agent alert/count stats
+            # !!! example for adding an entire dictionary into the output !!!
+            agentData['data']['data'].update(hostsData['data']['entries'][entry]['stats'])
+            
+            # here, we're adding a single key to the output named "reported_clone" and passing the value into it.
+            # !!! example for adding a single key:value pair into the output !!!
+            tempDict = { 'reported_clone':hostsData['data']['entries'][entry]['reported_clone']}
+            agentData['data']['data'] = {**agentData['data']['data'],**tempDict}
+           
+            # Here we're writing the file to disk with a hard-coded filename containing the "hostname" + "agent ID" + ".json" extension.
+            # Notice that we need to step into the nested arrays ['data']['data'] to get hostname and id.
+            with open(workingPath + agentData['data']['data']['hostname'] + '-' + agentData['data']['data']['id'] + '.json', "w") as out:
+                # Notice that we're only taking an inner slice of the python dictionary object. This is what allows Splunk to read it in a legible format.
+                json.dump(agentData['data']['data'], out)
+            # Here we're just increasing the iterator +1, a looping standard.
+            entry += 1
