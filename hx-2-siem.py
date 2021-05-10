@@ -8,9 +8,10 @@
 
 a.k.a. FireEye HX Agent Health 2 SIEM Ingestion Script
 
-Version: 0.0.2
+Version: 0.0.3
 Author: Dan Uber
 Twitter: @danub3r
+Special Thanks to Don Rumford and Keith Fields at FireEye for their API & session handling wisdom!
 
 
 Purpose: I wrote this to ingest HX endpoint data into Splunk, or any other SIEM that can scoop JSON.
@@ -48,9 +49,11 @@ Steps: 1. Ensure you have Python3 installed.
 # HTTP Response.                              #
 # Requests is what we're using to do the HTTP #
 # request, including the basic auth string.   #
-# URLLib helps us
+# URLLib helps us "URL-encode" strings to     # 
+# make our lives easier.                      # 
+# Logging enables easy script log output.     #
 ###############################################
-import os, json, requests, urllib
+import os, json, requests, urllib, logging
 from os import listdir
 ###############################################
 #                 </Modules>                  #
@@ -105,15 +108,42 @@ from os import listdir
 #              other path after .com, as that #
 #              information gets built into    #
 #              the requests below.            #
+#                                             #
+# logFile:       Define an output file name   #
+#              for this script's internal log #
+#              output.                        #
+
 ###############################################
-hxAPIUser = 'API_Analyst_User'
-hxAPIPass = 'API_Analyst_Pass'
-workingPath = 'C:\Windows\Needs\A\Final\Double\Slash\\'
+hxAPIUser = 'EXAMPLE_USER'
+hxAPIPass = 'EXAMPLE_PASS'
+workingPath = 'EXAMPLE\WORKING\PATH'
 limit = "50000"
 applianceURL = 'https://EXAMPLE-hx-webui-1.hex01.helix.apps.fireeye.com'
+logFileName = 'hx2siem.log'
 ###############################################
 #             </Configuration>                #
 ###############################################
+
+
+###############################################
+#              <Logging Config>               #
+###############################################
+# There are 5 logging levels:                 # 
+#  -- Critical, Error, Warning, Info, Debug   # 
+# To troubleshoot the script, simply change   # 
+# 'level = logging.WARNING' from WARNING to   # 
+# DEBUG.                                      #
+###############################################
+logging.basicConfig(
+    filename = logFileName,
+    level = logging.WARNING,
+    format = '%(asctime)s:%(levelname)s:%(message)s',
+    filemode='w'
+)
+###############################################
+#              </Logging Config>              #
+###############################################
+
 
 ###############################################
 #               <Filter List>                 #
@@ -155,7 +185,10 @@ encodedFilters = urllib.parse.quote('[{"field":"online","arg":["online"],"operat
 # must have the "api_analyst" role assigned   #
 # to it within our HX Appliance.              #
 ###############################################
-emit = requests.get(applianceURL + '/hx/api/v3/hosts?limit=' + limit, auth=(hxAPIUser, hxAPIPass))
+logging.debug('HX-2-SIEM Script Started!')
+logging.debug('Attempting first API request')
+token = requests.get(applianceURL + '/hx/api/v3/token', auth=(hxAPIUser, hxAPIPass))
+emit = requests.get(applianceURL + '/hx/api/v3/hosts?limit=' + limit, headers={'X-FeApi-Token': token.headers['X-FeApi-Token']})
 ###############################################
 #               </Web Request>                #
 ###############################################
@@ -165,10 +198,13 @@ emit = requests.get(applianceURL + '/hx/api/v3/hosts?limit=' + limit, auth=(hxAP
 
 # This deserializes the JSON into a Python 
 # Dictionary Object, stored in the "data" variable.
+logging.debug('Deserializing JSON response into a Python Object')
+#print("Deserializing JSON response into a Python Object")
 hostsData = json.loads(emit.text)
 
 # File Manipulation Section - Keep in mind that you might need an extra backslash to prevent the trailing ' from being escaped.
 
+logging.debug('Cleaning up the file system')
 for file in listdir(workingPath):
     if file.endswith('.json'):
         os.remove(workingPath + file)
@@ -184,8 +220,9 @@ if hostsData['data']['total'] > 0:
     entry = 0
     # This should step through each object in the JSON object we got earlier.
     while entry < (hostsData['data']['total']):
+        print("Entry: " + str(entry) + " / Total: " + str(hostsData['data']['total']))
         # sub-query to pull host-management data from HX
-        req = requests.get(applianceURL + '/hx/api/plugins/host-management/v1/data/' + hostsData['data']['entries'][entry]['_id'], auth=(hxAPIUser, hxAPIPass))
+        req = requests.get(applianceURL + '/hx/api/plugins/host-management/v1/data/' + hostsData['data']['entries'][entry]['_id'], headers={'X-FeApi-Token': token.headers['X-FeApi-Token']})
         # deserialize the retrieved host-management api json blob into a python dictionary
         agentData = json.loads(req.text)
         
@@ -206,4 +243,6 @@ if hostsData['data']['total'] > 0:
                 # Notice that we're only taking an inner slice of the python dictionary object. This is what allows Splunk to read it in a legible format.
                 json.dump(agentData['data']['data'], out)
             # Here we're just increasing the iterator +1, a looping standard.
-            entry += 1
+        entry += 1
+
+token.close()
