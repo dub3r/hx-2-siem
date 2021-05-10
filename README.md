@@ -1,4 +1,5 @@
-'''
+```
+
 ██╗  ██╗██╗  ██╗     ██████╗       ███████╗██╗███████╗███╗   ███╗
 ██║  ██║╚██╗██╔╝     ╚════██╗      ██╔════╝██║██╔════╝████╗ ████║
 ███████║ ╚███╔╝█████╗ █████╔╝█████╗███████╗██║█████╗  ██╔████╔██║
@@ -34,4 +35,4 @@ Steps: 1. Ensure you have Python3 installed.
        7. Configure your SIEM to ingest files it sees created in the targeted output directory.
        8. ...
        9. Profit
-'''
+```
