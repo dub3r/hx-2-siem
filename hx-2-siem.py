@@ -8,7 +8,7 @@
 
 a.k.a. FireEye HX Agent Health 2 SIEM Ingestion Script
 
-Version: 0.0.3
+Version: 0.0.5
 Author: Dan Uber
 Twitter: @danub3r
 Special Thanks to Don Rumford and Keith Fields at FireEye for their API & session handling wisdom!
@@ -55,75 +55,20 @@ Steps: 1. Ensure you have Python3 installed.
 ###############################################
 import os, json, requests, urllib, logging
 from os import listdir
+
 ###############################################
 #                 </Modules>                  #
 ###############################################
 
-
-###############################################
-#               <Configuration>               #
-###############################################
-# hxAPIUser:     Insert your username which   #
-#              you configured in your HX      # 
-#              Console with the API_Analyst   #
-#              Role.                          #
-#                                             # 
-# hxAPIPass:     Insert above user's          #
-#              password, as configured in the #
-#              HX Console.                    #
-#                                             # 
-# workingPath:   The directory where all of the #
-#              .json output files will go.    # 
-#              ***IMPORTANT*** Make sure you #
-#              include a trailing slash!!!    #
-#              This is where we tell our SIEM #
-#              to watch and ingest any files  #
-#              that it sees. Remember that if #
-#              you're doing a Windows path,   #
-#              you need a double backslash at #
-#              the end, because backslashes   #
-#              are escape characters in       #
-#              Python3.                       #
-#                                             # 
-# limit:         This will limit the JSON     #
-#              response to only return a      #
-#              limited number of endpoints.   #
-#              If you limit the output,       # 
-#              it is normal to get an error:  #
-#              "list index out of range"      #
-#              because our while loop's       # 
-#              condition iterates through     # 
-#              ['data']['total'], which does  # 
-#              not reflect the limit, rather  # 
-#              the environment's total number # 
-#              of agents.                     #
-#                                             # 
-# applianceURL:  This is your HX WebUI URL.   #
-#              The example I've included      #
-#              below should be similar to     # 
-#              what your environment has.     #
-#              Please go from https:// to the #
-#              .com. Don't include a trailing #
-#              slash after the .com or any    #
-#              other path after .com, as that #
-#              information gets built into    #
-#              the requests below.            #
-#                                             #
-# logFile:       Define an output file name   #
-#              for this script's internal log #
-#              output.                        #
-
-###############################################
-hxAPIUser = 'EXAMPLE_USER'
-hxAPIPass = 'EXAMPLE_PASS'
-workingPath = 'EXAMPLE\WORKING\PATH'
-limit = "50000"
-applianceURL = 'https://EXAMPLE-hx-webui-1.hex01.helix.apps.fireeye.com'
-logFileName = 'hx2siem.log'
-###############################################
-#             </Configuration>                #
-###############################################
-
+# Config Import
+import cfg
+hxAPIUser = cfg.User()
+hxAPIPass = cfg.Pass()
+workingPath = cfg.Path()
+limit = cfg.Limit()
+applianceURL = cfg.URL()
+logFileName = cfg.LogFile()
+logEnable = cfg.logEnabled()
 
 ###############################################
 #              <Logging Config>               #
@@ -134,15 +79,18 @@ logFileName = 'hx2siem.log'
 # 'level = logging.WARNING' from WARNING to   # 
 # DEBUG.                                      #
 ###############################################
-logging.basicConfig(
-    filename = logFileName,
-    level = logging.WARNING,
-    format = '%(asctime)s:%(levelname)s:%(message)s',
-    filemode='w'
-)
+if logEnable == 1:
+    logging.basicConfig(
+        filename = logFileName,
+        level = logging.WARNING,
+        format = '%(asctime)s:%(levelname)s:%(message)s',
+        filemode='w'
+    )
 ###############################################
 #              </Logging Config>              #
 ###############################################
+
+
 
 
 ###############################################
@@ -154,6 +102,7 @@ logging.basicConfig(
 # conducting additional testing if you wish.  #
 ###############################################
 '''
+baseFilter = '{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}'
 malwareGuard_Uninstalled = urllib.parse.quote('[{"field":"malwareGuard","arg":["uninstalled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
 malwareGuard_Disabled = urllib.parse.quote('[{"field":"malwareGuard","arg":["disabled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
 realTimeStatus_Uninstalled = urllib.parse.quote('[{"field":"realTimeStatus","arg":["uninstalled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
@@ -161,7 +110,7 @@ realTimeStatus_Disabled = urllib.parse.quote('[{"field":"realTimeStatus","arg":[
 malwareAVstatus_Uninstalled = urllib.parse.quote('[{"field":"malwareAVstatus","arg":["uninstalled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
 malwareAVstatus_Disabled = urllib.parse.quote('[{"field":"malwareAVstatus","arg":["disabled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
 ExdPluginStatus_Uninstalled  = urllib.parse.quote('[{"field":"ExdPluginStatus","arg":["uninstalled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
-ExdPluginStatus_Disabled  = urllib.parse.quote('[{"field":"ExdPluginStatus","arg":["disabled"],"operator":"equals"},{"field":"online","arg":["online"],"operator":"equals"},{"field":"productName","arg":["win"],"operator":"contains"}]', safe='')
+ExdPluginStatus_Disabled  = urllib.parse.quote('[{"field":"ExdPluginStatus","arg":["disabled"],"operator":"equals"},' + baseFilter + ']', safe='')
 encodedFilters = urllib.parse.quote('[{"field":"online","arg":["online"],"operator":"equals"}]', safe='')
 '''
 ###############################################
@@ -188,7 +137,7 @@ encodedFilters = urllib.parse.quote('[{"field":"online","arg":["online"],"operat
 logging.debug('HX-2-SIEM Script Started!')
 logging.debug('Attempting first API request')
 token = requests.get(applianceURL + '/hx/api/v3/token', auth=(hxAPIUser, hxAPIPass))
-emit = requests.get(applianceURL + '/hx/api/v3/hosts?limit=' + limit, headers={'X-FeApi-Token': token.headers['X-FeApi-Token']})
+emit = requests.get(applianceURL + '/hx/api/v3/hosts?limit=' + str(limit), headers={'X-FeApi-Token': token.headers['X-FeApi-Token']})
 ###############################################
 #               </Web Request>                #
 ###############################################
@@ -220,6 +169,8 @@ if hostsData['data']['total'] > 0:
     entry = 0
     # This should step through each object in the JSON object we got earlier.
     while entry < (hostsData['data']['total']):
+        if entry >= limit:
+            break
         print("Entry: " + str(entry) + " / Total: " + str(hostsData['data']['total']))
         # sub-query to pull host-management data from HX
         req = requests.get(applianceURL + '/hx/api/plugins/host-management/v1/data/' + hostsData['data']['entries'][entry]['_id'], headers={'X-FeApi-Token': token.headers['X-FeApi-Token']})
