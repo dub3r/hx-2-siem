@@ -1,4 +1,4 @@
-```
+'''
 ██╗  ██╗██╗  ██╗     ██████╗       ███████╗██╗███████╗███╗   ███╗
 ██║  ██║╚██╗██╔╝     ╚════██╗      ██╔════╝██║██╔════╝████╗ ████║
 ███████║ ╚███╔╝█████╗ █████╔╝█████╗███████╗██║█████╗  ██╔████╔██║
@@ -7,11 +7,11 @@
 ╚═╝  ╚═╝╚═╝  ╚═╝     ╚══════╝      ╚══════╝╚═╝╚══════╝╚═╝     ╚═╝
 a.k.a. FireEye HX Agent Health 2 SIEM Ingestion Script
 
-
-Version: 0.0.2
+Version: 0.0.3
 Author: Dan Uber
 Twitter: @danub3r
 
+Special Thanks to Don Rumford and Keith Fields at FireEye for their API & session handling wisdom!
 
 Purpose: I wrote this to ingest HX endpoint data into Splunk, or any other SIEM that can scoop JSON.
          The script is pretty simple, we query the hx/api/v3/hosts API while passing it a customizable
@@ -25,7 +25,6 @@ Purpose: I wrote this to ingest HX endpoint data into Splunk, or any other SIEM 
          what we need, then we serialize it back into JSON and write it to a file. This allows us to
          `cleanly` ingest the data into a third-party SIEM like Splunk, Security Onion, etc.
          
-         
 Steps: 1. Ensure you have Python3 installed.
        2. Import the modules from the <Modules> section below using `pip3 install <module>`.
        3. On your HX appliance, create an API user, preferably with the "API_Analyst" role.
@@ -35,4 +34,4 @@ Steps: 1. Ensure you have Python3 installed.
        7. Configure your SIEM to ingest files it sees created in the targeted output directory.
        8. ...
        9. Profit
-```
+'''
