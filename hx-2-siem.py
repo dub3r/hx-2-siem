@@ -171,7 +171,6 @@ if hostsData['data']['total'] > 0:
     while entry < (hostsData['data']['total']):
         if entry >= limit:
             break
-        print("Entry: " + str(entry) + " / Total: " + str(hostsData['data']['total']))
         # sub-query to pull host-management data from HX
         req = requests.get(applianceURL + '/hx/api/plugins/host-management/v1/data/' + hostsData['data']['entries'][entry]['_id'], headers={'X-FeApi-Token': token.headers['X-FeApi-Token']})
         # deserialize the retrieved host-management api json blob into a python dictionary
